@@ -23,6 +23,12 @@ PLATFORMS: list[Platform] = [
 def _ensure_pyasic():
     """Ensure pyasic is installed and imported (runs in executor)."""
 
+    def patch_and_return(pyasic_module):
+        from .pyasic_compat import apply_pyasic_compat
+
+        apply_pyasic_compat(pyasic_module)
+        return pyasic_module
+
     def try_import():
         try:
             from importlib.metadata import version
@@ -37,7 +43,7 @@ def _ensure_pyasic():
 
     pyasic = try_import()
     if pyasic:
-        return pyasic
+        return patch_and_return(pyasic)
 
     # Need to install/reinstall
     from .patch import install_package
@@ -49,7 +55,7 @@ def _ensure_pyasic():
             del sys.modules[mod_name]
 
     import pyasic
-    return pyasic
+    return patch_and_return(pyasic)
 
 
 async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:

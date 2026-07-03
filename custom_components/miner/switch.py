@@ -13,6 +13,12 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
 from .coordinator import MinerCoordinator
+from .entity_helpers import miner_device_info
+from .miner_control import async_miner_supports_pause
+from .miner_control import miner_active_state
+from .miner_control import miner_supports_pause
+from .miner_control import pause_mining
+from .miner_control import resume_mining
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -32,7 +38,7 @@ async def async_setup_entry(
         created.add(key)
 
     await coordinator.async_config_entry_first_refresh()
-    if coordinator.miner.supports_shutdown:
+    if await async_miner_supports_pause(coordinator.miner):
         async_add_entities(
             [
                 MinerActiveSwitch(
@@ -51,8 +57,10 @@ class MinerActiveSwitch(CoordinatorEntity[MinerCoordinator], SwitchEntity):
     ) -> None:
         """Initialize the sensor."""
         super().__init__(coordinator=coordinator)
-        self._attr_unique_id = f"{self.coordinator.data['mac']}-active"
-        self._attr_is_on = self.coordinator.data["is_mining"]
+        self._attr_unique_id = f"{self.coordinator.data['device_id']}-active"
+        self._attr_is_on = miner_active_state(
+            self.coordinator.miner, self.coordinator.data["is_mining"]
+        )
         self.updating_switch = False
         self._last_mining_mode = None
 
@@ -64,26 +72,28 @@ class MinerActiveSwitch(CoordinatorEntity[MinerCoordinator], SwitchEntity):
     @property
     def device_info(self) -> entity.DeviceInfo:
         """Return device info."""
-        return entity.DeviceInfo(
-            identifiers={(DOMAIN, self.coordinator.data["mac"])},
-            manufacturer=self.coordinator.data["make"],
-            model=self.coordinator.data["model"],
-            sw_version=self.coordinator.data["fw_ver"],
-            name=f"{self.coordinator.config_entry.title}",
+        return miner_device_info(
+            DOMAIN,
+            self.coordinator.data,
+            f"{self.coordinator.config_entry.title}",
         )
 
     async def async_turn_on(self) -> None:
         """Turn on miner."""
         miner = self.coordinator.miner
         _LOGGER.debug(f"{self.coordinator.config_entry.title}: Resume mining.")
-        if not miner.supports_shutdown:
-            raise TypeError(f"{miner}: Shutdown not supported.")
+        if not miner_supports_pause(miner) and not await async_miner_supports_pause(
+            miner
+        ):
+            raise TypeError(f"{miner}: Pause switch not supported.")
+        result = await resume_mining(miner)
+        if not result:
+            self._attr_is_on = False
+            self.async_write_ha_state()
+            import pyasic
+
+            raise pyasic.APIError("Failed to resume mining.")
         self._attr_is_on = True
-        try:
-            await miner.resume_mining()
-        except Exception as err:
-            # VNish and some firmwares return empty response but still work
-            _LOGGER.warning(f"{self.coordinator.config_entry.title}: Resume API returned error (may still work): {err}")
         if miner.supports_power_modes and self._last_mining_mode:
             try:
                 config = await miner.get_config()
@@ -98,25 +108,31 @@ class MinerActiveSwitch(CoordinatorEntity[MinerCoordinator], SwitchEntity):
         """Turn off miner."""
         miner = self.coordinator.miner
         _LOGGER.debug(f"{self.coordinator.config_entry.title}: Stop mining.")
-        if not miner.supports_shutdown:
-            raise TypeError(f"{miner}: Shutdown not supported.")
+        if not miner_supports_pause(miner) and not await async_miner_supports_pause(
+            miner
+        ):
+            raise TypeError(f"{miner}: Pause switch not supported.")
         if miner.supports_power_modes:
             try:
                 self._last_mining_mode = self.coordinator.data.get("config", {}).mining_mode if self.coordinator.data.get("config") else None
             except Exception:
                 self._last_mining_mode = None
+        result = await pause_mining(miner)
+        if not result:
+            self._attr_is_on = True
+            self.async_write_ha_state()
+            import pyasic
+
+            raise pyasic.APIError("Failed to pause mining.")
         self._attr_is_on = False
-        try:
-            await miner.stop_mining()
-        except Exception as err:
-            # VNish and some firmwares return empty response but still work
-            _LOGGER.warning(f"{self.coordinator.config_entry.title}: Stop API returned error (may still work): {err}")
         self.updating_switch = True
         self.async_write_ha_state()
 
     @callback
     def _handle_coordinator_update(self) -> None:
-        is_mining = self.coordinator.data["is_mining"]
+        is_mining = miner_active_state(
+            self.coordinator.miner, self.coordinator.data["is_mining"]
+        )
         if is_mining is not None:
             if self.updating_switch:
                 if is_mining == self._attr_is_on:

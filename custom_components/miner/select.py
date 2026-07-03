@@ -8,7 +8,6 @@ from homeassistant.components.number import NumberEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import callback
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import device_registry
 from homeassistant.helpers import entity
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -17,6 +16,7 @@ from homeassistant.const import UnitOfPower
 
 from .const import DOMAIN
 from .coordinator import MinerCoordinator
+from .entity_helpers import miner_device_info
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -70,23 +70,16 @@ class MinerPowerLimitNumber(CoordinatorEntity[MinerCoordinator], NumberEntity):
     @property
     def device_info(self) -> entity.DeviceInfo:
         """Return device info."""
-        return entity.DeviceInfo(
-            identifiers={(DOMAIN, self.coordinator.data["mac"])},
-            connections={
-                ("ip", self.coordinator.data["ip"]),
-                (device_registry.CONNECTION_NETWORK_MAC, self.coordinator.data["mac"]),
-            },
-            configuration_url=f"http://{self.coordinator.data['ip']}",
-            manufacturer=self.coordinator.data["make"],
-            model=self.coordinator.data["model"],
-            sw_version=self.coordinator.data["fw_ver"],
-            name=f"{self.coordinator.config_entry.title}",
+        return miner_device_info(
+            DOMAIN,
+            self.coordinator.data,
+            f"{self.coordinator.config_entry.title}",
         )
 
     @property
     def unique_id(self) -> str | None:
         """Return device UUID."""
-        return f"{self.coordinator.data['mac']}-power_limit"
+        return f"{self.coordinator.data['device_id']}-power_limit"
 
     @property
     def native_min_value(self) -> float | None:

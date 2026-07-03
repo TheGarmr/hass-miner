@@ -35,6 +35,8 @@ def _ensure_pyasic():
     """Ensure pyasic is installed and imported."""
     global pyasic, MinerNetwork, MinerMake
     if pyasic is not None:
+        from .pyasic_compat import apply_pyasic_compat
+        apply_pyasic_compat(pyasic)
         return
 
     def try_import():
@@ -61,6 +63,8 @@ def _ensure_pyasic():
         import pyasic as _pyasic
 
     pyasic = _pyasic
+    from .pyasic_compat import apply_pyasic_compat
+    apply_pyasic_compat(pyasic)
     from pyasic import MinerNetwork as _MinerNetwork
     MinerNetwork = _MinerNetwork
     from pyasic.device.makes import MinerMake as _MinerMake
