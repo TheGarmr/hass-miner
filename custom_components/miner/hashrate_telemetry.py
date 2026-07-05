@@ -40,6 +40,13 @@ def hashrate_to_th(value: Any) -> float | None:
     return normalize_hashrate(value).value
 
 
+def miner_hashrate_unit(miner: Any) -> str | None:
+    """Return the stable display unit expected for a miner model."""
+    if _miner_uses_solution_hashrate(miner):
+        return KILO_SOL_PER_SECOND
+    return None
+
+
 def normalize_hashrate(value: Any) -> NormalizedHashrate:
     """Return display-ready SHA or Equihash hashrate values."""
     if value is None:
@@ -62,6 +69,42 @@ def normalize_hashrate(value: Any) -> NormalizedHashrate:
         return NormalizedHashrate(value=_rounded(float(value)), unit=None)
     except (TypeError, ValueError):
         return NormalizedHashrate(value=None, unit=None)
+
+
+def hashrate_with_vnish_fallback(
+    value: Any,
+    fallback_sensors: dict[str, Any],
+    *,
+    is_mining: bool | None,
+) -> NormalizedHashrate:
+    """Return pyasic hashrate or VNish instant/average hashrate fallback."""
+    normalized = normalize_hashrate(value)
+    if normalized.value not in (None, 0):
+        return normalized
+    if not is_mining:
+        return NormalizedHashrate(value=None, unit=None)
+
+    for sensor in ("instant_hashrate", "average_hashrate"):
+        fallback = _number(fallback_sensors.get(sensor))
+        if fallback:
+            return NormalizedHashrate(value=fallback, unit=TERA_HASH_PER_SECOND)
+    return normalized
+
+
+def ideal_hashrate_with_vnish_fallback(
+    value: Any,
+    fallback_sensors: dict[str, Any],
+) -> NormalizedHashrate:
+    """Return pyasic ideal hashrate or VNish nominal/stock hashrate fallback."""
+    normalized = normalize_hashrate(value)
+    if normalized.value not in (None, 0):
+        return normalized
+
+    for sensor in ("nominal_hashrate", "stock_hashrate"):
+        fallback = _number(fallback_sensors.get(sensor))
+        if fallback:
+            return NormalizedHashrate(value=fallback, unit=TERA_HASH_PER_SECOND)
+    return normalized
 
 
 def _solution_rate_to_ksol(rate: Any, unit: Any) -> float | None:
@@ -108,6 +151,28 @@ def _hash_unit_multiplier(unit: Any) -> int | None:
 def _rounded(value: float) -> float:
     """Round display hashrate values consistently."""
     return round(value, 2)
+
+
+def _miner_uses_solution_hashrate(miner: Any) -> bool:
+    """Return true for miners that should always use solution-rate units."""
+    values = (
+        getattr(miner, "algo", None),
+        getattr(miner, "model", None),
+        getattr(miner, "raw_model", None),
+        miner.__class__.__name__ if miner is not None else None,
+    )
+    text = " ".join(str(value) for value in values if value).upper()
+    return "EQUIHASH" in text or "Z11" in text or "Z15" in text
+
+
+def _number(value: Any) -> float | None:
+    """Return value as rounded float when possible."""
+    if value is None:
+        return None
+    try:
+        return _rounded(float(value))
+    except (TypeError, ValueError):
+        return None
 
 
 def _int(value: Any) -> int | None:

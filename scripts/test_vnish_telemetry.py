@@ -36,7 +36,9 @@ def main():
             "cooling": {
                 "fans": [
                     {"id": 0, "rpm": 0, "status": "ok", "max_rpm": 6500},
-                ]
+                ],
+                "settings": {"mode": {"name": "immersion"}},
+                "fan_duty": 100,
             },
             "chains": [
                 {
@@ -105,6 +107,8 @@ def main():
     assert miner_sensors["water_inlet_temperature_min"] == 29
     assert miner_sensors["water_outlet_temperature_max"] == 39
     assert miner_sensors["current_preset"] == "6619 watt ~ 422 TH"
+    assert miner_sensors["cooling_mode"] == "immersion"
+    assert miner_sensors["fan_duty"] == 100
     assert miner_sensors["total_chips"] == 2
     assert miner_sensors["bad_chips"] == 1
     assert miner_sensors["chip_errors"] == 3

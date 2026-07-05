@@ -131,6 +131,8 @@ def assert_extended_payload(module) -> None:
         },
         "miner_sensors": {
             "average_hashrate": 421.68,
+            "cooling_mode": "immersion",
+            "fan_duty": 100,
             "water_inlet_temperature_min": 29,
             "water_outlet_temperature_max": 39,
         },
@@ -160,6 +162,8 @@ def assert_extended_payload(module) -> None:
     assert payload["mac"] == "AA:BB:CC:DD:EE:FF"
     assert payload["device"]["fw_ver"] == "Vnish 1.2.8"
     assert payload["miner_sensors"]["average_hashrate"] == 421.68
+    assert payload["miner_sensors"]["cooling_mode"] == "immersion"
+    assert payload["miner_sensors"]["fan_duty"] == 100
     assert payload["board_sensors"]["0"]["inlet_water_temperature"] == 29
     assert payload["board_sensors"]["0"]["board_power"] == 2033
     assert payload["fan_sensors"]["0"]["fan_status"] == "ok"

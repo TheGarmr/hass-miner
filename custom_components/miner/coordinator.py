@@ -25,6 +25,7 @@ from .entity_helpers import stable_device_id
 from .fan_telemetry import fetch_rpc_fan_sensors
 from .fan_telemetry import merge_fan_sensors
 from .hashrate_telemetry import TERA_HASH_PER_SECOND
+from .hashrate_telemetry import miner_hashrate_unit
 from .hashrate_telemetry import normalize_hashrate
 from .vnish_telemetry import fetch_vnish_extended_data
 
@@ -92,6 +93,24 @@ class MinerCoordinator(DataUpdateCoordinator):
         """Return if device is available or not."""
         return self.miner is not None
 
+    def _zeroed_data(self):
+        """Return zeroed data while keeping hashrate units stable."""
+        data = {
+            **DEFAULT_DATA,
+            "power_limit_range": {
+                "min": self.config_entry.data.get(CONF_MIN_POWER, 15),
+                "max": self.config_entry.data.get(CONF_MAX_POWER, 10000),
+            },
+        }
+        preferred_hashrate_unit = miner_hashrate_unit(self.miner)
+        if preferred_hashrate_unit is not None:
+            data["sensor_units"] = {
+                "hashrate": preferred_hashrate_unit,
+                "ideal_hashrate": preferred_hashrate_unit,
+                "board_hashrate": preferred_hashrate_unit,
+            }
+        return data
+
     async def get_miner(self):
         """Get a valid Miner instance."""
         import pyasic  # lazy import to avoid blocking event loop
@@ -128,13 +147,7 @@ class MinerCoordinator(DataUpdateCoordinator):
                 _LOGGER.warning(
                     "Miner is offline – returning zeroed data (first failure)."
                 )
-                return {
-                    **DEFAULT_DATA,
-                    "power_limit_range": {
-                        "min": self.config_entry.data.get(CONF_MIN_POWER, 15),
-                        "max": self.config_entry.data.get(CONF_MAX_POWER, 10000),
-                    },
-                }
+                return self._zeroed_data()
 
             raise UpdateFailed("Miner Offline (consecutive failure)")
 
@@ -173,13 +186,7 @@ class MinerCoordinator(DataUpdateCoordinator):
                         _LOGGER.warning(
                             f"Error fetching miner data: {retry_err} – returning zeroed data (first failure)."
                         )
-                        return {
-                            **DEFAULT_DATA,
-                            "power_limit_range": {
-                                "min": self.config_entry.data.get(CONF_MIN_POWER, 15),
-                                "max": self.config_entry.data.get(CONF_MAX_POWER, 10000),
-                            },
-                        }
+                        return self._zeroed_data()
                     _LOGGER.exception(retry_err)
                     raise UpdateFailed from retry_err
             else:
@@ -189,13 +196,7 @@ class MinerCoordinator(DataUpdateCoordinator):
                     _LOGGER.warning(
                         f"Error fetching miner data: {err} – returning zeroed data (first failure)."
                     )
-                    return {
-                        **DEFAULT_DATA,
-                        "power_limit_range": {
-                            "min": self.config_entry.data.get(CONF_MIN_POWER, 15),
-                            "max": self.config_entry.data.get(CONF_MAX_POWER, 10000),
-                        },
-                    }
+                    return self._zeroed_data()
 
                 _LOGGER.exception(err)
                 raise UpdateFailed from err
@@ -210,6 +211,7 @@ class MinerCoordinator(DataUpdateCoordinator):
 
         normalized_hashrate = normalize_hashrate(miner_data.hashrate)
         normalized_expected_hashrate = normalize_hashrate(miner_data.expected_hashrate)
+        preferred_hashrate_unit = miner_hashrate_unit(self.miner)
         sensor_units = {
             sensor: unit
             for sensor, unit in (
@@ -218,6 +220,9 @@ class MinerCoordinator(DataUpdateCoordinator):
             )
             if unit is not None
         }
+        if preferred_hashrate_unit is not None:
+            sensor_units["hashrate"] = preferred_hashrate_unit
+            sensor_units["ideal_hashrate"] = preferred_hashrate_unit
 
         try:
             active_preset = miner_data.config.mining_mode.active_preset.name
@@ -271,6 +276,8 @@ class MinerCoordinator(DataUpdateCoordinator):
                 sensor_units["board_hashrate"] = TERA_HASH_PER_SECOND
             if "board_hashrate_ideal" in sensors:
                 sensor_units["board_hashrate_ideal"] = TERA_HASH_PER_SECOND
+        if preferred_hashrate_unit is not None:
+            sensor_units["board_hashrate"] = preferred_hashrate_unit
 
         fan_sensors = {
             idx: {"fan_speed": fan.speed} for idx, fan in enumerate(miner_data.fans)

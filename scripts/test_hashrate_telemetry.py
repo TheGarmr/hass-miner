@@ -43,6 +43,16 @@ class Hashrate:
         return float(self.rate)
 
 
+class Miner:
+    """Minimal miner metadata object."""
+
+    def __init__(self, model: str, algo: str | None = None) -> None:
+        """Store miner metadata."""
+        self.model = model
+        self.raw_model = model
+        self.algo = algo
+
+
 def main():
     """Run hashrate normalization assertions."""
     hashrate = load_module()
@@ -81,6 +91,10 @@ def main():
         None,
         {"nominal_hashrate": 424.19, "stock_hashrate": 401.17},
     ) == hashrate.NormalizedHashrate(424.19, "TH/s")
+    assert hashrate.miner_hashrate_unit(Miner("Z11")) == "KSol/s"
+    assert hashrate.miner_hashrate_unit(Miner("Z15 (Stock)")) == "KSol/s"
+    assert hashrate.miner_hashrate_unit(Miner("Antminer", "EQUIHASH")) == "KSol/s"
+    assert hashrate.miner_hashrate_unit(Miner("S21+ Hydro")) is None
     assert hashrate.normalize_hashrate(None) == hashrate.NormalizedHashrate(None, None)
 
 

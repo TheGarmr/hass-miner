@@ -96,6 +96,9 @@ def _miner_sensors(
     """Build miner-level sensors from VNish summary payloads."""
     pcb_temp = _dict(miner.get("pcb_temp"))
     chip_temp = _dict(miner.get("chip_temp"))
+    cooling = _dict(miner.get("cooling"))
+    cooling_settings = _dict(cooling.get("settings"))
+    cooling_mode = _dict(cooling_settings.get("mode"))
     chains = miner.get("chains", [])
     current_preset = _dict((perf_summary or {}).get("current_preset"))
     sensor_data = {
@@ -105,6 +108,8 @@ def _miner_sensors(
         "nominal_hashrate": _gh_to_th(miner.get("hr_nominal")),
         "stock_hashrate": _gh_to_th(miner.get("hr_stock")),
         "power_efficiency": _number(miner.get("power_efficiency")),
+        "cooling_mode": cooling_mode.get("name"),
+        "fan_duty": _number(cooling.get("fan_duty")),
         "hw_errors": _int(miner.get("hw_errors")),
         "hw_errors_percent": _number(miner.get("hw_errors_percent")),
         "devfee_percent": _number(miner.get("devfee_percent")),
