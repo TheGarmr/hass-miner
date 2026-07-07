@@ -143,6 +143,7 @@ def assert_extended_payload(module) -> None:
                 "board_temperature": 49,
                 "inlet_water_temperature": 29,
                 "outlet_water_temperature": 39,
+                "water_temperature_delta": 10,
             }
         },
         "fan_sensors": {0: {"fan_speed": 0, "fan_status": "ok"}},
@@ -165,8 +166,10 @@ def assert_extended_payload(module) -> None:
     assert payload["miner_sensors"]["cooling_mode"] == "immersion"
     assert payload["miner_sensors"]["fan_duty"] == 100
     assert payload["board_sensors"]["0"]["inlet_water_temperature"] == 29
+    assert payload["board_sensors"]["0"]["water_temperature_delta"] == 10
     assert payload["board_sensors"]["0"]["board_power"] == 2033
-    assert payload["fan_sensors"]["0"]["fan_status"] == "ok"
+    assert payload["fan_sensors"] == {}
+    assert payload["fans"] == []
     assert payload["sensor_attributes"] == {}
 
     json.dumps(payload)

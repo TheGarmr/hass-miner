@@ -25,6 +25,7 @@ from .const import TERA_HASH_PER_SECOND
 from .coordinator import MinerCoordinator
 from .entity_helpers import expected_count
 from .entity_helpers import miner_device_info
+from .voltage_telemetry import normalize_voltage
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -175,6 +176,26 @@ ENTITY_DESCRIPTION_KEY_MAP: dict[str, SensorEntityDescription] = {
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
+    "cooling_min_fan_duty": SensorEntityDescription(
+        key="Cooling Min Fan Duty",
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    "cooling_max_fan_duty": SensorEntityDescription(
+        key="Cooling Max Fan Duty",
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    "minimum_startup_water_temperature": SensorEntityDescription(
+        key="Minimum Startup Water Temperature",
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        suggested_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        state_class=SensorStateClass.MEASUREMENT,
+        device_class=SensorDeviceClass.TEMPERATURE,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
     "board_hashrate": SensorEntityDescription(
         key="Board Hashrate",
         native_unit_of_measurement=TERA_HASH_PER_SECOND,
@@ -201,8 +222,10 @@ ENTITY_DESCRIPTION_KEY_MAP: dict[str, SensorEntityDescription] = {
     ),
     "board_voltage": SensorEntityDescription(
         key="Board Voltage",
-        native_unit_of_measurement="mV",
+        native_unit_of_measurement="V",
+        suggested_unit_of_measurement="V",
         state_class=SensorStateClass.MEASUREMENT,
+        device_class=SensorDeviceClass.VOLTAGE,
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
     "board_power": SensorEntityDescription(
@@ -269,6 +292,13 @@ ENTITY_DESCRIPTION_KEY_MAP: dict[str, SensorEntityDescription] = {
         suggested_unit_of_measurement=UnitOfTemperature.CELSIUS,
         state_class=SensorStateClass.MEASUREMENT,
         device_class=SensorDeviceClass.TEMPERATURE,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    "water_temperature_delta": SensorEntityDescription(
+        key="Water Temperature Delta",
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        suggested_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
     "chip_status_red": SensorEntityDescription(
@@ -402,13 +432,24 @@ BOARD_SENSORS_DISABLED_BY_DEFAULT = {
     "board_hw_errors",
     "board_pcb_temperature_max",
     "board_pcb_temperature_min",
-    "board_voltage",
     "chip_status_grey",
     "chip_status_orange",
     "chip_status_red",
 }
 
 FAN_SENSORS_DISABLED_BY_DEFAULT = {"fan_max_speed"}
+
+
+def _uses_water_cooling(data: dict) -> bool:
+    """Return true for miners where cooling is represented as water blocks."""
+    mode = str(data.get("miner_sensors", {}).get("cooling_mode", "")).lower()
+    if mode in {"immersion", "immers"}:
+        return True
+    return any(
+        "inlet_water_temperature" in board_data
+        or "outlet_water_temperature" in board_data
+        for board_data in data.get("board_sensors", {}).values()
+    )
 
 
 async def async_setup_entry(
@@ -472,9 +513,9 @@ async def async_setup_entry(
     for board in board_numbers:
         for s in board_sensor_keys:
             sensors.append(_create_board_entity(board, s))
-    fan_numbers = sorted(coordinator.data["fan_sensors"]) or list(
-        range(expected_count(coordinator.miner.expected_fans, 4))
-    )
+    fan_numbers = sorted(coordinator.data["fan_sensors"])
+    if not fan_numbers and not _uses_water_cooling(coordinator.data):
+        fan_numbers = list(range(expected_count(coordinator.miner.expected_fans, 4)))
     fan_sensor_keys = sorted(
         {
             sensor
@@ -557,6 +598,7 @@ class MinerBoardSensor(CoordinatorEntity[MinerCoordinator], SensorEntity):
     """Defines a Miner Board Sensor."""
 
     entity_description: SensorEntityDescription
+    _BOARD_VOLTAGE_UNIT = "V"
 
     def __init__(
         self,
@@ -571,8 +613,54 @@ class MinerBoardSensor(CoordinatorEntity[MinerCoordinator], SensorEntity):
         self._board_num = board_num
         self._sensor = sensor
         self.entity_description = entity_description
+        if sensor == "board_voltage":
+            self._attr_suggested_unit_of_measurement = self._BOARD_VOLTAGE_UNIT
         if sensor in BOARD_SENSORS_DISABLED_BY_DEFAULT:
             self._attr_entity_registry_enabled_default = False
+
+    async def async_added_to_hass(self) -> None:
+        """Update stale board voltage display options."""
+        await super().async_added_to_hass()
+        if self._sensor != "board_voltage" or self.entity_id is None:
+            return
+
+        from homeassistant.helpers import entity_registry as er
+
+        registry = er.async_get(self.hass)
+        entry = registry.async_get(self.entity_id)
+        if entry is None:
+            return
+
+        updated_entry = entry
+        private_options = dict(entry.options.get("sensor.private", {}))
+        if (
+            private_options.get("suggested_unit_of_measurement")
+            != self._BOARD_VOLTAGE_UNIT
+        ):
+            private_options["suggested_unit_of_measurement"] = self._BOARD_VOLTAGE_UNIT
+            updated_entry = registry.async_update_entity_options(
+                self.entity_id,
+                "sensor.private",
+                private_options,
+            )
+
+        sensor_options = dict(updated_entry.options.get("sensor", {}))
+        if sensor_options.get("unit_of_measurement") == "mV":
+            sensor_options.pop("unit_of_measurement", None)
+            updated_entry = registry.async_update_entity_options(
+                self.entity_id,
+                "sensor",
+                sensor_options or None,
+            )
+
+        if updated_entry.unit_of_measurement == "mV":
+            updated_entry = registry.async_update_entity(
+                self.entity_id,
+                unit_of_measurement=self._BOARD_VOLTAGE_UNIT,
+            )
+
+        self.registry_entry = updated_entry
+        self._async_read_entity_options()
 
     @property
     def _sensor_data(self):
@@ -599,11 +687,15 @@ class MinerBoardSensor(CoordinatorEntity[MinerCoordinator], SensorEntity):
     @property
     def native_value(self) -> StateType:
         """Return the state of the sensor."""
+        if self._sensor == "board_voltage":
+            return normalize_voltage(self._sensor_data)
         return self._sensor_data
 
     @property
     def native_unit_of_measurement(self) -> str | None:
         """Return the native unit for the current miner algorithm."""
+        if self._sensor == "board_voltage":
+            return self._BOARD_VOLTAGE_UNIT
         return self.coordinator.data.get("sensor_units", {}).get(
             self._sensor,
             self.entity_description.native_unit_of_measurement,
@@ -648,7 +740,7 @@ class MinerFanSensor(CoordinatorEntity[MinerCoordinator], SensorEntity):
     @property
     def name(self) -> str | None:
         """Return name of the entity."""
-        return f"{self.coordinator.config_entry.title} Fan #{self._fan_num} {self.entity_description.key}"
+        return f"{self.coordinator.config_entry.title} Fan #{self._fan_num + 1} {self.entity_description.key}"
 
     @property
     def device_info(self) -> entity.DeviceInfo:

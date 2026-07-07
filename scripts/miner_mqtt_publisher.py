@@ -181,6 +181,9 @@ def _generic_firmware(value: Any) -> bool:
 def _slugify_model(value: Any) -> str:
     """Return a stable model slug for topics and file names."""
     text = str(value or "").strip().lower()
+    generic = re.sub(r"[^a-z0-9]+", "_", text).strip("_")
+    if generic in {"unknown", "unknown_vnish", "vnish"}:
+        return "unknown"
     if "z11" in text:
         return "z11"
     if "z15" in text:
@@ -225,7 +228,11 @@ def model_slug_from_payload(payload: Mapping[str, Any]) -> str:
 
 def resolve_runtime_config(miner: Any, *, ip: str = MINER_IP) -> RuntimeConfig:
     """Resolve topic and credentials from the detected miner model."""
-    model_slug = model_slug_from_miner(miner)
+    return runtime_config_from_model_slug(model_slug_from_miner(miner), ip=ip)
+
+
+def runtime_config_from_model_slug(model_slug: str, *, ip: str = MINER_IP) -> RuntimeConfig:
+    """Resolve topic and credentials from a normalized model slug."""
     settings = MODEL_SETTINGS.get(model_slug, {})
     topic = str(settings.get("topic") or f"{MQTT_TOPIC_PREFIX.rstrip('/')}/{model_slug}")
     web_username = settings.get("web_username", DEFAULT_WEB_USERNAME)
@@ -238,6 +245,14 @@ def resolve_runtime_config(miner: Any, *, ip: str = MINER_IP) -> RuntimeConfig:
         web_password=web_password,
         exclude_config=bool(settings.get("exclude_config", False)),
     )
+
+
+def _is_unknown_vnish_miner(miner: Any, runtime_config: RuntimeConfig) -> bool:
+    """Return true when pyasic did not identify a VNish miner model."""
+    if runtime_config.model_slug not in {"unknown", "vnish"}:
+        return False
+    web = getattr(miner, "web", None)
+    return "VNISH" in str(web.__class__.__name__).upper()
 
 
 def payload_file_path(payload: Mapping[str, Any]) -> Path:
@@ -363,6 +378,15 @@ def _merge_fan_telemetry(
     ]
 
 
+def _uses_immersion_cooling(payload: Mapping[str, Any]) -> bool:
+    """Return true when telemetry should be shown as water cooling blocks."""
+    miner_sensors = payload.get("miner_sensors")
+    if not isinstance(miner_sensors, Mapping):
+        return False
+    mode = str(miner_sensors.get("cooling_mode", "")).lower()
+    return mode in {"immersion", "immers"}
+
+
 def normalize_telemetry(
     ip: str,
     miner: Any,
@@ -402,7 +426,11 @@ def normalize_telemetry(
         "timestamp": collected_at.isoformat(),
     }
     _merge_extended_telemetry(payload, extended)
-    _merge_fan_telemetry(payload, fan_sensors)
+    if _uses_immersion_cooling(payload):
+        payload["fan_sensors"] = {}
+        payload["fans"] = []
+    else:
+        _merge_fan_telemetry(payload, fan_sensors)
     return payload
 
 
@@ -426,6 +454,22 @@ async def collect_telemetry(ip: str = MINER_IP) -> tuple[RuntimeConfig, dict[str
         raise RuntimeError(msg)
 
     runtime_config = resolve_runtime_config(miner, ip=ip)
+    extended: dict[str, Any] | None = None
+    if _is_unknown_vnish_miner(miner, runtime_config):
+        set_miner_credentials(
+            miner,
+            web_username="admin",
+            web_password="admin",
+        )
+        extended = await fetch_extended_telemetry(miner)
+        detected_slug = model_slug_from_payload(
+            {
+                "device": extended.get("device", {}),
+                "class": miner.__class__.__name__,
+            }
+        )
+        runtime_config = runtime_config_from_model_slug(detected_slug, ip=ip)
+
     set_miner_credentials(
         miner,
         web_username=runtime_config.web_username,
@@ -437,7 +481,8 @@ async def collect_telemetry(ip: str = MINER_IP) -> tuple[RuntimeConfig, dict[str
     else:
         data = await miner.get_data()
 
-    extended = await fetch_extended_telemetry(miner)
+    if extended is None:
+        extended = await fetch_extended_telemetry(miner)
     fan_sensors = await fetch_fan_telemetry(miner)
     payload = normalize_telemetry(
         ip,
