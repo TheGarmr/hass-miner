@@ -646,6 +646,8 @@ class MinerBoardSensor(CoordinatorEntity[MinerCoordinator], SensorEntity):
     @property
     def native_unit_of_measurement(self) -> str | None:
         """Return the native unit for the current miner algorithm."""
+        if self._sensor == "board_voltage":
+            return "V"
         return self.coordinator.data.get("sensor_units", {}).get(
             self._sensor,
             self.entity_description.native_unit_of_measurement,
