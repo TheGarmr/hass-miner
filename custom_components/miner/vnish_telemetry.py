@@ -4,6 +4,20 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+try:
+    from .voltage_telemetry import normalize_voltage
+except ImportError:  # pragma: no cover - used by standalone MQTT scripts
+    import importlib.util
+    from pathlib import Path
+
+    module_path = Path(__file__).with_name("voltage_telemetry.py")
+    spec = importlib.util.spec_from_file_location("miner_voltage_telemetry", module_path)
+    voltage_module = importlib.util.module_from_spec(spec)
+    if spec.loader is None:
+        raise
+    spec.loader.exec_module(voltage_module)
+    normalize_voltage = voltage_module.normalize_voltage
+
 _LOGGER = logging.getLogger(__name__)
 GIGA_HASH_PER_TERA_HASH = 1000
 
@@ -299,11 +313,8 @@ def _gh_to_th(value: Any) -> float | None:
 
 
 def _millivolts_to_volts(value: Any) -> float | None:
-    """Convert VNish chain voltage from mV to V."""
-    number = _number(value)
-    if number is None:
-        return None
-    return round(number / 1000, 2)
+    """Convert VNish chain voltage to V."""
+    return normalize_voltage(value)
 
 
 def _temperature_delta(inlet: float | None, outlet: float | None) -> float | None:

@@ -28,6 +28,7 @@ from .hashrate_telemetry import TERA_HASH_PER_SECOND
 from .hashrate_telemetry import miner_hashrate_unit
 from .hashrate_telemetry import normalize_hashrate
 from .vnish_telemetry import fetch_vnish_extended_data
+from .voltage_telemetry import normalize_voltage
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -271,11 +272,15 @@ class MinerCoordinator(DataUpdateCoordinator):
             board_hashrate = normalize_hashrate(board.hashrate)
             if board_hashrate.unit is not None:
                 sensor_units["board_hashrate"] = board_hashrate.unit
-            board_sensors[board.slot] = {
+            board_data = {
                 "board_temperature": board.temp,
                 "chip_temperature": board.chip_temp,
                 "board_hashrate": board_hashrate.value or 0,
             }
+            board_voltage = normalize_voltage(getattr(board, "voltage", None))
+            if board_voltage is not None:
+                board_data["board_voltage"] = board_voltage
+            board_sensors[board.slot] = board_data
         for board, sensors in vnish_data.get("board_sensors", {}).items():
             board_sensors.setdefault(board, {}).update(sensors)
             if "board_hashrate" in sensors:

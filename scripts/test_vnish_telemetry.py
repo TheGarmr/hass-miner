@@ -3,13 +3,26 @@ from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
+import sys
+import types
 
 
 def load_module():
     """Load vnish_telemetry without importing Home Assistant modules."""
     root = Path(__file__).resolve().parents[1]
+    custom_components_path = root / "custom_components"
+    miner_path = custom_components_path / "miner"
+    sys.modules.setdefault("custom_components", types.ModuleType("custom_components"))
+    miner_package = sys.modules.setdefault(
+        "custom_components.miner",
+        types.ModuleType("custom_components.miner"),
+    )
+    miner_package.__path__ = [str(miner_path)]
     module_path = root / "custom_components" / "miner" / "vnish_telemetry.py"
-    spec = importlib.util.spec_from_file_location("miner_vnish_telemetry", module_path)
+    spec = importlib.util.spec_from_file_location(
+        "custom_components.miner.vnish_telemetry",
+        module_path,
+    )
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
     spec.loader.exec_module(module)
