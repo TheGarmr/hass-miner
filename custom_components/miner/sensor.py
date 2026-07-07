@@ -25,6 +25,7 @@ from .const import TERA_HASH_PER_SECOND
 from .coordinator import MinerCoordinator
 from .entity_helpers import expected_count
 from .entity_helpers import miner_device_info
+from .voltage_telemetry import normalize_voltage
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -638,6 +639,8 @@ class MinerBoardSensor(CoordinatorEntity[MinerCoordinator], SensorEntity):
     @property
     def native_value(self) -> StateType:
         """Return the state of the sensor."""
+        if self._sensor == "board_voltage":
+            return normalize_voltage(self._sensor_data)
         return self._sensor_data
 
     @property
