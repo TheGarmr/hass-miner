@@ -34,6 +34,7 @@ def main():
             "hw_errors_percent": 0.0,
             "devfee_percent": 2.66,
             "cooling": {
+                "fan_num": 1,
                 "fans": [
                     {"id": 0, "rpm": 0, "status": "ok", "max_rpm": 6500},
                 ],
@@ -75,6 +76,16 @@ def main():
     perf_summary = {
         "current_preset": {"name": "6619", "pretty": "6619 watt ~ 422 TH"}
     }
+    settings = {
+        "miner": {
+            "cooling": {
+                "mode": {"name": "immers"},
+                "fan_min_duty": 10,
+                "fan_max_duty": 100,
+                "min_startup_water_temp": 20,
+            }
+        }
+    }
     info = {
         "miner": "Antminer S21+ Hydro",
         "fw_name": "Vnish",
@@ -92,6 +103,7 @@ def main():
         chips=chips,
         perf_summary=perf_summary,
         info=info,
+        settings=settings,
     )
 
     assert data["device"]["make"] == "Antminer"
@@ -109,6 +121,9 @@ def main():
     assert miner_sensors["current_preset"] == "6619 watt ~ 422 TH"
     assert miner_sensors["cooling_mode"] == "immersion"
     assert miner_sensors["fan_duty"] == 100
+    assert miner_sensors["cooling_min_fan_duty"] == 10
+    assert miner_sensors["cooling_max_fan_duty"] == 100
+    assert miner_sensors["minimum_startup_water_temperature"] == 20
     assert miner_sensors["total_chips"] == 2
     assert miner_sensors["bad_chips"] == 1
     assert miner_sensors["chip_errors"] == 3
@@ -117,10 +132,11 @@ def main():
     assert board["board_hashrate"] == 138.62
     assert board["board_hashrate_ideal"] == 140.92
     assert board["board_power"] == 2033
-    assert board["board_voltage"] == 21585
+    assert board["board_voltage"] == 21.59
     assert board["chip_status_orange"] == 1
     assert board["inlet_water_temperature"] == 29
     assert board["outlet_water_temperature"] == 39
+    assert board["water_temperature_delta"] == 10
 
     fan = data["fan_sensors"][0]
     assert fan["fan_speed"] == 0
@@ -128,6 +144,7 @@ def main():
     assert fan["fan_max_speed"] == 6500
 
     assert data["sensor_attributes"] == {}
+    assert data["cooling"] == {"mode": "immersion", "fan_count": 1}
 
 
 if __name__ == "__main__":

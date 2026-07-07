@@ -65,6 +65,12 @@ def _generic_firmware(value):
     return value in (None, "") or str(value).lower() in {"vnish"}
 
 
+def _uses_vnish_water_cooling(vnish_data):
+    """Return true when VNish reports hydro/immersion cooling blocks."""
+    cooling_mode = str(vnish_data.get("cooling", {}).get("mode", "")).lower()
+    return cooling_mode in {"immersion", "immers"}
+
+
 class MinerCoordinator(DataUpdateCoordinator):
     """Class to manage fetching update data from the Miner."""
 
@@ -279,15 +285,18 @@ class MinerCoordinator(DataUpdateCoordinator):
         if preferred_hashrate_unit is not None:
             sensor_units["board_hashrate"] = preferred_hashrate_unit
 
-        fan_sensors = {
-            idx: {"fan_speed": fan.speed} for idx, fan in enumerate(miner_data.fans)
-        }
-        fan_sensors = merge_fan_sensors(
-            fan_sensors,
-            await fetch_rpc_fan_sensors(self.miner),
-        )
-        for fan, sensors in vnish_data.get("fan_sensors", {}).items():
-            fan_sensors.setdefault(fan, {}).update(sensors)
+        if _uses_vnish_water_cooling(vnish_data):
+            fan_sensors = {}
+        else:
+            fan_sensors = {
+                idx: {"fan_speed": fan.speed} for idx, fan in enumerate(miner_data.fans)
+            }
+            fan_sensors = merge_fan_sensors(
+                fan_sensors,
+                await fetch_rpc_fan_sensors(self.miner),
+            )
+            for fan, sensors in vnish_data.get("fan_sensors", {}).items():
+                fan_sensors.setdefault(fan, {}).update(sensors)
 
         data = {
             "hostname": hostname,
