@@ -347,7 +347,10 @@ def _merge_extended_telemetry(
         payload["mac"] = _clean(device.get("mac"))
 
     payload["device"] = _clean(device)
-    payload["miner_sensors"] = _clean(extended.get("miner_sensors", {}))
+    miner_sensors = extended.get("miner_sensors", {})
+    payload["miner_sensors"] = _clean(miner_sensors)
+    if isinstance(miner_sensors, Mapping) and "mining_time" in miner_sensors:
+        payload["mining_time"] = _clean(miner_sensors.get("mining_time"))
     payload["board_sensors"] = _clean(extended.get("board_sensors", {}))
     payload["fan_sensors"] = _clean(extended.get("fan_sensors", {}))
     payload["sensor_attributes"] = _clean(extended.get("sensor_attributes", {}))

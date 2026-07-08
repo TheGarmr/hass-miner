@@ -13,6 +13,7 @@ from homeassistant.const import PERCENTAGE
 from homeassistant.const import REVOLUTIONS_PER_MINUTE
 from homeassistant.const import UnitOfPower
 from homeassistant.const import UnitOfTemperature
+from homeassistant.const import UnitOfTime
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -28,6 +29,20 @@ from .entity_helpers import miner_device_info
 from .voltage_telemetry import normalize_voltage
 
 _LOGGER = logging.getLogger(__name__)
+
+HASHRATE_UNITS = {"KSol/s", TERA_HASH_PER_SECOND}
+MINER_HASHRATE_SENSORS = {
+    "hashrate",
+    "ideal_hashrate",
+    "instant_hashrate",
+    "average_hashrate",
+    "nominal_hashrate",
+    "stock_hashrate",
+}
+BOARD_HASHRATE_SENSORS = {
+    "board_hashrate",
+    "board_hashrate_ideal",
+}
 
 
 ENTITY_DESCRIPTION_KEY_MAP: dict[str, SensorEntityDescription] = {
@@ -163,6 +178,13 @@ ENTITY_DESCRIPTION_KEY_MAP: dict[str, SensorEntityDescription] = {
     "current_preset": SensorEntityDescription(
         key="Current Preset",
         device_class=SensorDeviceClass.ENUM,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    "mining_time": SensorEntityDescription(
+        key="Mining Time",
+        native_unit_of_measurement=UnitOfTime.SECONDS,
+        device_class=SensorDeviceClass.DURATION,
+        state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
     "cooling_mode": SensorEntityDescription(
@@ -452,6 +474,51 @@ def _uses_water_cooling(data: dict) -> bool:
     )
 
 
+async def _async_update_hashrate_registry_unit(
+    entity_obj: SensorEntity,
+    expected_unit: str | None,
+) -> None:
+    """Update stale hashrate units kept in the entity registry."""
+    if expected_unit not in HASHRATE_UNITS or entity_obj.entity_id is None:
+        return
+
+    from homeassistant.helpers import entity_registry as er
+
+    registry = er.async_get(entity_obj.hass)
+    entry = registry.async_get(entity_obj.entity_id)
+    if entry is None:
+        return
+
+    stale_units = HASHRATE_UNITS - {expected_unit}
+    updated_entry = entry
+    private_options = dict(entry.options.get("sensor.private", {}))
+    if private_options.get("suggested_unit_of_measurement") != expected_unit:
+        private_options["suggested_unit_of_measurement"] = expected_unit
+        updated_entry = registry.async_update_entity_options(
+            entity_obj.entity_id,
+            "sensor.private",
+            private_options,
+        )
+
+    sensor_options = dict(updated_entry.options.get("sensor", {}))
+    if sensor_options.get("unit_of_measurement") in stale_units:
+        sensor_options.pop("unit_of_measurement", None)
+        updated_entry = registry.async_update_entity_options(
+            entity_obj.entity_id,
+            "sensor",
+            sensor_options or None,
+        )
+
+    if updated_entry.unit_of_measurement in stale_units:
+        updated_entry = registry.async_update_entity(
+            entity_obj.entity_id,
+            unit_of_measurement=expected_unit,
+        )
+
+    entity_obj.registry_entry = updated_entry
+    entity_obj._async_read_entity_options()
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
@@ -545,8 +612,20 @@ class MinerSensor(CoordinatorEntity[MinerCoordinator], SensorEntity):
         self._attr_unique_id = f"{self.coordinator.data['device_id']}-{sensor}"
         self._sensor = sensor
         self.entity_description = entity_description
+        unit = self.coordinator.data.get("sensor_units", {}).get(sensor)
+        if sensor in MINER_HASHRATE_SENSORS and unit in HASHRATE_UNITS:
+            self._attr_suggested_unit_of_measurement = unit
         if sensor in MINER_SENSORS_DISABLED_BY_DEFAULT:
             self._attr_entity_registry_enabled_default = False
+
+    async def async_added_to_hass(self) -> None:
+        """Update stale hashrate display options."""
+        await super().async_added_to_hass()
+        if self._sensor in MINER_HASHRATE_SENSORS:
+            await _async_update_hashrate_registry_unit(
+                self,
+                self.native_unit_of_measurement,
+            )
 
     @property
     def _sensor_data(self):
@@ -615,12 +694,21 @@ class MinerBoardSensor(CoordinatorEntity[MinerCoordinator], SensorEntity):
         self.entity_description = entity_description
         if sensor == "board_voltage":
             self._attr_suggested_unit_of_measurement = self._BOARD_VOLTAGE_UNIT
+        unit = self.coordinator.data.get("sensor_units", {}).get(sensor)
+        if sensor in BOARD_HASHRATE_SENSORS and unit in HASHRATE_UNITS:
+            self._attr_suggested_unit_of_measurement = unit
         if sensor in BOARD_SENSORS_DISABLED_BY_DEFAULT:
             self._attr_entity_registry_enabled_default = False
 
     async def async_added_to_hass(self) -> None:
-        """Update stale board voltage display options."""
+        """Update stale board display options."""
         await super().async_added_to_hass()
+        if self._sensor in BOARD_HASHRATE_SENSORS:
+            await _async_update_hashrate_registry_unit(
+                self,
+                self.native_unit_of_measurement,
+            )
+
         if self._sensor != "board_voltage" or self.entity_id is None:
             return
 

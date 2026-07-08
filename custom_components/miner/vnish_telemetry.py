@@ -124,6 +124,7 @@ def _miner_sensors(
     """Build miner-level sensors from VNish summary payloads."""
     pcb_temp = _dict(miner.get("pcb_temp"))
     chip_temp = _dict(miner.get("chip_temp"))
+    miner_status = _dict(miner.get("miner_status"))
     cooling = _dict(miner.get("cooling"))
     cooling_settings = _dict(cooling.get("settings"))
     cooling_mode = _dict(cooling_settings.get("mode"))
@@ -140,6 +141,7 @@ def _miner_sensors(
         "average_hashrate": _number(miner.get("average_hashrate")),
         "nominal_hashrate": _gh_to_th(miner.get("hr_nominal")),
         "stock_hashrate": _gh_to_th(miner.get("hr_stock")),
+        "mining_time": _mining_time(miner_status),
         "power_efficiency": _number(miner.get("power_efficiency")),
         "cooling_mode": cooling_mode_name,
         "fan_duty": _number(cooling.get("fan_duty")),
@@ -302,6 +304,18 @@ def _int(value: Any) -> int | None:
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+def _mining_time(miner_status: dict[str, Any]) -> int | None:
+    """Return elapsed mining time in seconds from VNish miner status."""
+    state_time = _int(miner_status.get("miner_state_time"))
+    if state_time is None:
+        return None
+
+    state = str(miner_status.get("miner_state", "")).lower()
+    if state == "mining":
+        return state_time
+    return 0
 
 
 def _gh_to_th(value: Any) -> float | None:

@@ -133,6 +133,7 @@ def assert_extended_payload(module) -> None:
             "average_hashrate": 421.68,
             "cooling_mode": "immersion",
             "fan_duty": 100,
+            "mining_time": 14334,
             "water_inlet_temperature_min": 29,
             "water_outlet_temperature_max": 39,
         },
@@ -164,6 +165,8 @@ def assert_extended_payload(module) -> None:
     assert payload["device"]["fw_ver"] == "Vnish 1.2.8"
     assert payload["miner_sensors"]["average_hashrate"] == 421.68
     assert payload["miner_sensors"]["cooling_mode"] == "immersion"
+    assert payload["miner_sensors"]["mining_time"] == 14334
+    assert payload["mining_time"] == 14334
     assert payload["miner_sensors"]["fan_duty"] == 100
     assert payload["board_sensors"]["0"]["inlet_water_temperature"] == 29
     assert payload["board_sensors"]["0"]["water_temperature_delta"] == 10

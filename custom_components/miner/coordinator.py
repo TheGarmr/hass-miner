@@ -115,6 +115,7 @@ class MinerCoordinator(DataUpdateCoordinator):
                 "hashrate": preferred_hashrate_unit,
                 "ideal_hashrate": preferred_hashrate_unit,
                 "board_hashrate": preferred_hashrate_unit,
+                "board_hashrate_ideal": preferred_hashrate_unit,
             }
         return data
 
@@ -289,6 +290,7 @@ class MinerCoordinator(DataUpdateCoordinator):
                 sensor_units["board_hashrate_ideal"] = TERA_HASH_PER_SECOND
         if preferred_hashrate_unit is not None:
             sensor_units["board_hashrate"] = preferred_hashrate_unit
+            sensor_units["board_hashrate_ideal"] = preferred_hashrate_unit
 
         if _uses_vnish_water_cooling(vnish_data):
             fan_sensors = {}

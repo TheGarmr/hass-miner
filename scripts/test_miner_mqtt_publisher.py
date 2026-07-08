@@ -136,6 +136,7 @@ def test_normalized_payload_is_json_safe():
             "miner_sensors": {
                 "average_hashrate": 463.97,
                 "fan_duty": 100,
+                "mining_time": 14334,
             }
         },
     )
@@ -149,6 +150,8 @@ def test_normalized_payload_is_json_safe():
     }
     assert payload["miner_sensors"]["average_hashrate"] == 463.97
     assert payload["miner_sensors"]["fan_duty"] == 100
+    assert payload["miner_sensors"]["mining_time"] == 14334
+    assert payload["mining_time"] == 14334
     assert payload["timestamp"] == "2026-07-03T12:00:00+00:00"
     json.dumps(payload)
 

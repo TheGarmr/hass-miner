@@ -46,6 +46,10 @@ def main():
             "hw_errors": 82,
             "hw_errors_percent": 0.0,
             "devfee_percent": 2.66,
+            "miner_status": {
+                "miner_state": "mining",
+                "miner_state_time": 14334,
+            },
             "cooling": {
                 "fan_num": 1,
                 "fans": [
@@ -129,6 +133,7 @@ def main():
     assert miner_sensors["average_hashrate"] == 421.68
     assert miner_sensors["nominal_hashrate"] == 424.19
     assert miner_sensors["stock_hashrate"] == 401.17
+    assert miner_sensors["mining_time"] == 14334
     assert miner_sensors["water_inlet_temperature_min"] == 29
     assert miner_sensors["water_outlet_temperature_max"] == 39
     assert miner_sensors["current_preset"] == "6619 watt ~ 422 TH"
