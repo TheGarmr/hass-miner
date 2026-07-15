@@ -1611,7 +1611,7 @@ async-interrupt = ">=1.1.1"
 bleak = ">=1.0.1"
 bleak-retry-connector = ">=4"
 bluetooth-adapters = ">=2"
-bluetooth-auto-recovery = ">=1.5.1"
+bluetooth-auto-recovery = ">=1.5.0"
 bluetooth-data-tools = ">=1.28.0"
 dbus-fast = {version = ">=2.30.2", markers = "platform_system == \"Linux\""}
 

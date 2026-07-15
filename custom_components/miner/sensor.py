@@ -460,6 +460,7 @@ BOARD_SENSORS_DISABLED_BY_DEFAULT = {
 }
 
 FAN_SENSORS_DISABLED_BY_DEFAULT = {"fan_max_speed"}
+FAN_SENSOR_VALUE_KEYS = {"fan_speed", "fan_max_speed", "fan_status"}
 
 
 def _uses_water_cooling(data: dict) -> bool:
@@ -588,6 +589,7 @@ async def async_setup_entry(
             sensor
             for fan_data in coordinator.data["fan_sensors"].values()
             for sensor in fan_data
+            if sensor in FAN_SENSOR_VALUE_KEYS
         }
     ) or ["fan_speed"]
     for fan in fan_numbers:
@@ -843,6 +845,17 @@ class MinerFanSensor(CoordinatorEntity[MinerCoordinator], SensorEntity):
     def native_value(self) -> StateType:
         """Return the state of the sensor."""
         return self._sensor_data
+
+    @property
+    def extra_state_attributes(self) -> dict | None:
+        """Return optional fan metadata."""
+        fan_data = self.coordinator.data["fan_sensors"].get(self._fan_num, {})
+        attributes = {
+            key: value
+            for key, value in fan_data.items()
+            if key not in FAN_SENSOR_VALUE_KEYS
+        }
+        return attributes or None
 
     @property
     def available(self) -> bool:

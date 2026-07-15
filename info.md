@@ -54,7 +54,7 @@ Miner control and data is handled using [@UpstreamData](https://github.com/Upstr
 [exampleimg]: example.png
 [forum-shield]: https://img.shields.io/badge/community-forum-brightgreen.svg?style=for-the-badge
 [forum]: https://community.home-assistant.io/
-[license]: https://github.com/TheGarmr/miner/blob/main/LICENSE
+[license]: https://github.com/TheGarmr/hass-miner/blob/main/LICENSE
 [license-shield]: https://img.shields.io/github/license/TheGarmr/hass-miner.svg?style=for-the-badge
 [maintenance-shield]: https://img.shields.io/badge/maintainer-%40TheGarmr-blue.svg?style=for-the-badge
 [releases-shield]: https://img.shields.io/github/release/TheGarmr/hass-miner.svg?style=for-the-badge
