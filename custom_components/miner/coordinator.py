@@ -301,9 +301,8 @@ class MinerCoordinator(DataUpdateCoordinator):
             fan_sensors = merge_fan_sensors(
                 fan_sensors,
                 await fetch_rpc_fan_sensors(self.miner),
+                vnish_data.get("fan_sensors", {}),
             )
-            for fan, sensors in vnish_data.get("fan_sensors", {}).items():
-                fan_sensors.setdefault(fan, {}).update(sensors)
 
         data = {
             "hostname": hostname,
