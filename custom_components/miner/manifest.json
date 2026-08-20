@@ -8,8 +8,8 @@
   "homekit": {},
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/TheGarmr/hass-miner/issues",
-  "requirements": [],
+  "requirements": ["pyasic==0.78.8"],
   "ssdp": [],
-  "version": "1.5.0",
+  "version": "1.6.0",
   "zeroconf": []
 }
