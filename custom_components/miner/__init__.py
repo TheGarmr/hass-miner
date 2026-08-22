@@ -1,8 +1,6 @@
 """The Miner integration."""
 from __future__ import annotations
 
-import sys
-
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
@@ -11,6 +9,8 @@ from homeassistant.exceptions import ConfigEntryNotReady
 from .const import CONF_IP
 from .const import DOMAIN
 from .const import PYASIC_VERSION
+from .runtime_dependencies import clear_cached_runtime_modules
+from .runtime_dependencies import validate_asyncssh
 
 PLATFORMS: list[Platform] = [
     Platform.SENSOR,
@@ -32,6 +32,8 @@ def _ensure_pyasic():
     def try_import():
         try:
             from importlib.metadata import version
+
+            validate_asyncssh()
             import pyasic
             if not hasattr(pyasic, 'get_miner'):
                 raise ImportError("pyasic module incomplete")
@@ -47,13 +49,14 @@ def _ensure_pyasic():
 
     # Need to install/reinstall
     from .patch import install_package
-    install_package(f"pyasic=={PYASIC_VERSION}", force_reinstall=True)
 
-    # Clear any cached broken imports
-    for mod_name in list(sys.modules.keys()):
-        if mod_name.startswith('pyasic'):
-            del sys.modules[mod_name]
+    clear_cached_runtime_modules()
+    if not install_package(f"pyasic=={PYASIC_VERSION}", force_reinstall=True):
+        raise ImportError(f"Unable to install pyasic=={PYASIC_VERSION}")
 
+    # Reload repaired packages instead of reusing partial imports.
+    clear_cached_runtime_modules()
+    validate_asyncssh()
     import pyasic
     return patch_and_return(pyasic)
 

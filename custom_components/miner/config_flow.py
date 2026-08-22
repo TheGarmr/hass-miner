@@ -1,6 +1,5 @@
 """Config flow for Miner."""
 import logging
-import sys
 from importlib.metadata import version
 
 import voluptuous as vol
@@ -22,6 +21,8 @@ from .const import CONF_WEB_PASSWORD
 from .const import CONF_WEB_USERNAME
 from .const import DOMAIN
 from .const import PYASIC_VERSION
+from .runtime_dependencies import clear_cached_runtime_modules
+from .runtime_dependencies import validate_asyncssh
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -41,6 +42,7 @@ def _ensure_pyasic():
 
     def try_import():
         try:
+            validate_asyncssh()
             import pyasic as _pyasic
             if not hasattr(_pyasic, 'get_miner'):
                 raise ImportError("pyasic module incomplete")
@@ -53,13 +55,15 @@ def _ensure_pyasic():
     _pyasic = try_import()
     if _pyasic is None:
         # Clear any cached broken imports before reinstalling
-        for mod_name in list(sys.modules.keys()):
-            if mod_name.startswith('pyasic'):
-                del sys.modules[mod_name]
+        clear_cached_runtime_modules()
 
         from .patch import install_package
-        install_package(f"pyasic=={PYASIC_VERSION}", force_reinstall=True)
 
+        if not install_package(f"pyasic=={PYASIC_VERSION}", force_reinstall=True):
+            raise ImportError(f"Unable to install pyasic=={PYASIC_VERSION}")
+
+        clear_cached_runtime_modules()
+        validate_asyncssh()
         import pyasic as _pyasic
 
     pyasic = _pyasic
