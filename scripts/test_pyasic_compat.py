@@ -1,11 +1,13 @@
 """Lightweight tests for fork-local pyasic compatibility patches."""
 from __future__ import annotations
 
+import asyncio
 import importlib.util
 from pathlib import Path
 
 import pyasic
 from pyasic.miners.factory import MINER_CLASSES
+from pyasic.miners.factory import MinerFactory
 from pyasic.miners.factory import MinerTypes
 
 
@@ -51,8 +53,46 @@ def main():
     ]
 
     before = dict(antminer_classes)
+    patched_model_fn = MinerFactory.get_miner_model_antminer
     compat.apply_pyasic_compat(pyasic)
     assert antminer_classes == before
+    delattr(pyasic, "_hass_miner_compat_applied")
+    compat.apply_pyasic_compat(pyasic)
+    assert MinerFactory.get_miner_model_antminer is patched_model_fn
+
+    check_blank_antminer_model_fallback()
+
+
+def check_blank_antminer_model_fallback():
+    """Blank Antminer type falls back to the model named in CompileTime."""
+    factory = MinerFactory()
+    version_reply = {
+        "VERSION": [
+            {
+                "CompileTime": "Uspex Z15 Custom Firmware 2026 v29 FINAL",
+                "Type": "",
+            }
+        ]
+    }
+
+    async def fake_web(ip):
+        return ""
+
+    async def fake_sock(ip):
+        return ""
+
+    async def fake_api(ip, command):
+        assert command == "version"
+        return version_reply
+
+    factory._get_model_antminer_web = fake_web
+    factory._get_model_antminer_sock = fake_sock
+    factory.send_api_command = fake_api
+
+    assert asyncio.run(factory.get_miner_model_antminer("192.0.2.36")) == "Antminer Z15"
+
+    version_reply["VERSION"][0]["CompileTime"] = "Fri Jul  3 11:39:06 CST 2020"
+    assert asyncio.run(factory.get_miner_model_antminer("192.0.2.36")) == ""
 
 
 if __name__ == "__main__":
